@@ -28,6 +28,7 @@
 #include "mixer.h"
 #include "music.h"
 
+#include "music_html5.h"
 #include "music_cmd.h"
 #include "music_wav.h"
 #include "music_mikmod.h"
@@ -80,6 +81,9 @@ static char* soundfont_paths = NULL;
 /* Interfaces for the various music interfaces, ordered by priority */
 static Mix_MusicInterface *s_music_interfaces[] =
 {
+#ifdef MUSIC_HTML5
+    &Mix_MusicInterface_HTML5,
+#endif
 #ifdef MUSIC_CMD
     &Mix_MusicInterface_CMD,
 #endif
@@ -380,6 +384,7 @@ void open_music(const SDL_AudioSpec *spec)
 #endif
 
     /* Load the music interfaces that don't have explicit initialization */
+    load_music_type(MUS_HTML5);
     load_music_type(MUS_CMD);
     load_music_type(MUS_WAV);
 

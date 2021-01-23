@@ -127,6 +127,7 @@ typedef enum {
 /* These are types of music files (not libraries used to load them) */
 typedef enum {
     MUS_NONE,
+    MUS_HTML5,
     MUS_CMD,
     MUS_WAV,
     MUS_MOD,

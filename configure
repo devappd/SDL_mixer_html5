@@ -894,6 +894,7 @@ enable_dependency_tracking
 with_sdl_prefix
 with_sdl_exec_prefix
 enable_sdltest
+enable_music_html5
 enable_music_cmd
 enable_music_wave
 enable_music_mod
@@ -11686,6 +11687,17 @@ done
 
 
 CheckVisibilityHidden
+
+# Check whether --enable-music-html5 was given.
+if test "${enable_music_html5+set}" = set; then :
+  enableval=$enable_music_html5;
+else
+  enable_music_html5=no
+fi
+
+if test x$enable_music_html5 = xyes; then
+    EXTRA_CFLAGS="$EXTRA_CFLAGS -DMUSIC_HTML5"
+fi
 
 # Check whether --enable-music-cmd was given.
 if test "${enable_music_cmd+set}" = set; then :
