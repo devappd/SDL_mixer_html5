@@ -444,7 +444,7 @@ Mix_MusicType detect_music_type_from_magic(const Uint8 *magic)
     return MUS_MOD;
 }
 
-static Mix_MusicType detect_music_type(SDL_RWops *src)
+Mix_MusicType detect_music_type(SDL_RWops *src)
 {
     Uint8 magic[12];
     Mix_MusicType t;
