@@ -31,6 +31,7 @@ typedef struct {
     int id;
     SDL_RWops *src;
     SDL_bool freesrc;
+    SDL_bool playing;
 } MusicHTML5;
 
 static SDL_bool html5_opened(void)
@@ -38,6 +39,20 @@ static SDL_bool html5_opened(void)
     return EM_ASM_INT({
         return !!Module["SDL2Mixer"] && !!Module["SDL2Mixer"].music;
     });
+}
+
+static void html5_handle_music_stopped(void *context)
+{
+    // Sets music->playing to FALSE. Call "finished" handler explicitly
+    // in devappd/html5_mixer which does not run its own sound loop.
+
+    MusicHTML5 *music = (MusicHTML5 *)context;
+    if (music)
+        music->playing = SDL_FALSE;
+
+#ifdef HTML5_MIXER
+    run_music_finished_hook();
+#endif
 }
 
 static int MusicHTML5_Open(const SDL_AudioSpec *spec)
@@ -48,6 +63,8 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
         return 0;
 
     EM_ASM(({
+        const wasmMusicStopped = $0;
+
         Module["SDL2Mixer"] = {
             blob: {
                 // URL.createObjectURL(...): numUses (int)
@@ -147,9 +164,7 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                     audio.dataset.playCount = 0;
                     audio.currentTime = 0;
                     audio.loop = false;
-
-                    // Signal `true` to run hookMusicFinished
-                    return true;
+                    dynCall("vi", wasmMusicStopped, [audio.dataset.context]);
                 }
             },
 
@@ -166,22 +181,10 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                 audio.dataset.playCount = 0;
                 audio.currentTime = 0;
                 audio.loop = false;
+                dynCall("vi", wasmMusicStopped, [audio.dataset.context]);
             }
         };
-    }));
-
-#ifdef HTML5_MIXER
-    // HookMusicFinished support for html5_mixer (a minimal implementation of SDL2_mixer)
-    EM_ASM({
-        const hookMusicFinished = $0;
-        Module["SDL2Mixer"].musicFinished = function(predefined) {
-            return function(e) {
-                if (predefined(e))
-                    dynCall("v", hookMusicFinished, []);
-            }
-        }(Module["SDL2Mixer"].musicFinished);
-    }, run_music_finished_hook);
-#endif
+    }), html5_handle_music_stopped);
 
     return 0;
 }
@@ -191,7 +194,12 @@ static void *MusicHTML5_CreateFromRW(SDL_RWops *src, int freesrc)
     void *buf;
     int id = -1;
     int size = src->size(src);
-    MusicHTML5 *music;
+    MusicHTML5 *music = (MusicHTML5 *)SDL_calloc(1, sizeof *music);
+
+    if (music == NULL) {
+        Mix_SetError("Out of memory");
+        return NULL;
+    }
 
     if (src->type == SDL_RWOPS_STDFILE)
         buf = src->hidden.stdio.fp;
@@ -210,6 +218,7 @@ static void *MusicHTML5_CreateFromRW(SDL_RWops *src, int freesrc)
         id = EM_ASM_INT({
             const ptr = $0;
             const size = $1;
+            const context = $2;
 
             const arr = new Uint8Array(Module.HEAPU8.buffer, ptr, size);
             const blob = new Blob([arr], { type: "octet/stream" });
@@ -225,22 +234,22 @@ static void *MusicHTML5_CreateFromRW(SDL_RWops *src, int freesrc)
             Module["SDL2Mixer"].music[id] = new Audio(url);
             Module["SDL2Mixer"].music[id].addEventListener("ended", Module["SDL2Mixer"].musicFinished, false);
             Module["SDL2Mixer"].music[id].addEventListener("error", Module["SDL2Mixer"].musicError, false);
+            Module["SDL2Mixer"].music[id].dataset.context = context;
             return id;
-        }, buf, size);
+        }, buf, size, music);
     }
 
     if (id == -1)
-        return NULL;
-
-    /* Allocate and fill the music structure */
-    music = (MusicHTML5 *)SDL_calloc(1, sizeof *music);
-    if (music == NULL) {
-        Mix_SetError("Out of memory");
+    {
+        SDL_free(music);
         return NULL;
     }
+
+    /* Fill the music structure */
     music->id = id;
     music->src = src;
     music->freesrc = freesrc;
+    music->playing = SDL_TRUE;
 
     /* We're done */
     return music;
@@ -249,8 +258,13 @@ static void *MusicHTML5_CreateFromRW(SDL_RWops *src, int freesrc)
 /* Load a music stream from the given file */
 static void *MusicHTML5_CreateFromFile(const char *file)
 {
-    MusicHTML5 *music;
+    MusicHTML5 *music = (MusicHTML5 *)SDL_calloc(1, sizeof *music);;
     int id = -1;
+
+    if (music == NULL) {
+        Mix_SetError("Out of memory");
+        return NULL;
+    }
 
     SDL_RWops *src = SDL_RWFromFile(file, "rb");
     if (src != NULL)
@@ -312,6 +326,7 @@ static void *MusicHTML5_CreateFromFile(const char *file)
             }
 
             const url = UTF8ToString($0);
+            const context = $1;
 
             if (!isValidUrl) {
                 console.error(`URL ${url} is invalid`);
@@ -322,21 +337,20 @@ static void *MusicHTML5_CreateFromFile(const char *file)
             Module["SDL2Mixer"].music[id] = new Audio(url);
             Module["SDL2Mixer"].music[id].addEventListener("ended", Module["SDL2Mixer"].musicFinished, false);
             Module["SDL2Mixer"].music[id].addEventListener("error", Module["SDL2Mixer"].musicError, false);
+            Module["SDL2Mixer"].music[id].dataset.context = context;
             return id;
-        }, file);
+        }, file, music);
     }
 
-    if (id == -1)
-        return NULL;
-
-    /* Allocate and fill the music structure */
-    music = (MusicHTML5 *)SDL_calloc(1, sizeof *music);
-    if (music == NULL) {
-        Mix_SetError("Out of memory");
+    if (id == -1) {
+        SDL_free(music);
         return NULL;
     }
+
+    /* Fill the music structure */
     music->id = id;
     music->freesrc = SDL_FALSE;
+    music->playing = SDL_TRUE;
 
     /* We're done */
     return music;
@@ -404,15 +418,37 @@ static SDL_bool MusicHTML5_IsPlaying(void *context)
 {
     MusicHTML5 *music = (MusicHTML5 *)context;
     
-    return EM_ASM_INT({
+    if (!music) {
+        // Call "finished" handler in devappd/html5_mixer
+        html5_handle_music_stopped(context);
+        return SDL_FALSE;
+    }
+
+    // We track a music->playing variable to play nice with music_mixer()'s
+    // IsPlaying() check on every frame. E.g., the check will run when
+    // <audio> is buffering and the music is technically not "playing".
+    // Ergo, the HookMusicFinished() callback is called immediately when
+    // the <audio> has not even begun playback.
+    //
+    // To resolve this, we rely on JavaScript callbacks to reset the
+    // music->playing status on end, on error, etc.
+
+    int safeStatus = EM_ASM_INT({
         const id = $0;
-        return  Module["SDL2Mixer"].music[id]
-            &&  Module["SDL2Mixer"].music[id].currentTime > 0
-            // SDL Mixer considers "paused" music as "playing"
-            //&& !Module["SDL2Mixer"].music[id].paused
-            && !Module["SDL2Mixer"].music[id].ended
-            &&  Module["SDL2Mixer"].music[id].readyState > 2;
+        return Module["SDL2Mixer"].music[id]
+               && !Module["SDL2Mixer"].music[id].ended
+               // SDL Mixer considers "paused" music as "playing"
+               //&& !Module["SDL2Mixer"].music[id].paused
+               // These conditions interfere with the "playing" check
+               //&&  Module["SDL2Mixer"].music[id].readyState > 2;
+               //&&  Module["SDL2Mixer"].music[id].currentTime > 0
+               ;
     }, music->id);
+
+    if (!safeStatus)
+        html5_handle_music_stopped(context);
+
+    return music->playing;
 }
 
 /* Jump (seek) to a given position (time is in seconds) */
@@ -464,6 +500,8 @@ static void MusicHTML5_Stop(void *context)
         Module["SDL2Mixer"].music[id].currentTime = 0;
         Module["SDL2Mixer"].music[id].loop = false;
     }, music->id);
+
+    html5_handle_music_stopped(context);
 }
 
 /* Close the given music stream */
