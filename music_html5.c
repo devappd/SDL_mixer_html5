@@ -340,25 +340,8 @@ static void *MusicHTML5_CreateFromFile(const char *file)
             url = Module["SDL2Mixer"].createBlob(buf);
         } catch(e) {
             // Fail silently, presume file not in FS.
-            // Assume it's a URL
-            function isValidUrl(string) {
-                let url;
-                
-                try {
-                    url = new URL(string);
-                } catch (_) {
-                    return false;  
-                }
-
-                return url.protocol === "http:" || url.protocol === "https:";
-            }
-
-            if (isValidUrl(file))
-                url = file;
-            else {
-                Module["printErr"](`URL ${url} is invalid`);
-                return -1;
-            }
+            // Assume it's a relative or absolute URL
+            url = file;
         }
 
         const id = Module["SDL2Mixer"].createMusic(url, context);
