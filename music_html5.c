@@ -204,7 +204,7 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                     audio.currentTime = 0;
                     audio.play();
                 } else
-                    this.resetMusicState(audio);
+                    Module["SDL2Mixer"].resetMusicState(audio);
             },
 
             musicError: function(e) {
@@ -215,13 +215,11 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
 
                 Module["printErr"]("Error " + audio.error.code + "; details: " + audio.error.message);
 
-                // Reset to defaults
-                this.resetMusicState(audio);
+                Module["SDL2Mixer"].resetMusicState(audio);
             },
 
             musicInterrupted: function(e) {
-                // Reset to defaults
-                this.resetMusicState(e.target);
+                Module["SDL2Mixer"].resetMusicState(e.target);
             }
         };
     }), html5_handle_music_stopped);
