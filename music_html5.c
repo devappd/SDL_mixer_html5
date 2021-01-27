@@ -82,9 +82,9 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
 
                 // TODO: Match blob by ptr and size so we don't duplicate
 
-                if (!(url in Module["SDL2Mixer"].blob))
-                    Module["SDL2Mixer"].blob[url] = 0;
-                Module["SDL2Mixer"].blob[url]++;
+                if (!(url in this.blob))
+                    this.blob[url] = 0;
+                this.blob[url]++;
 
                 return url;
             },
@@ -97,16 +97,17 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
             },
 
             createMusic: function(url, context) {
-                const id = Module["SDL2Mixer"].getNewId();
-                Module["SDL2Mixer"].music[id] = new Audio(url);
-                Module["SDL2Mixer"].music[id].addEventListener("ended", Module["SDL2Mixer"].musicFinished, false);
-                Module["SDL2Mixer"].music[id].addEventListener("error", Module["SDL2Mixer"].musicError, false);
-                Module["SDL2Mixer"].music[id].addEventListener("abort", Module["SDL2Mixer"].musicInterrupted, false);
-                // Can browser recover from these states? If not, consider enabling these.
-                //Module["SDL2Mixer"].music[id].addEventListener("stalled", Module["SDL2Mixer"].musicInterrupted, false);
-                //Module["SDL2Mixer"].music[id].addEventListener("suspend", Module["SDL2Mixer"].musicInterrupted, false);
+                const id = this.getNewId();
+                this.music[id] = new Audio(url);
+                this.music[id].addEventListener("ended", this.musicFinished, false);
+                this.music[id].addEventListener("error", this.musicError, false);
+                this.music[id].addEventListener("abort", this.musicInterrupted, false);
+                // Can browser recover from these states? If not, consider enabling these
+                // as well as the corresponding removeEventListeners in deleteMusic().
+                //this.music[id].addEventListener("stalled", this.musicInterrupted, false);
+                //this.music[id].addEventListener("suspend", this.musicInterrupted, false);
                 if (context)
-                    Module["SDL2Mixer"].music[id].dataset.context = context;
+                    this.music[id].dataset.context = context;
                 return id;
             },
 
@@ -120,6 +121,12 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                 this.music[id].removeAttribute("src");
                 this.music[id].load();
                 this.music[id].remove();
+
+                this.music[id].removeEventListener("ended", this.musicFinished, false);
+                this.music[id].removeEventListener("error", this.musicError, false);
+                this.music[id].removeEventListener("abort", this.musicInterrupted, false);
+                //this.music[id].removeEventListener("stalled", this.musicInterrupted, false);
+                //this.music[id].removeEventListener("suspend", this.musicInterrupted, false);
 
                 delete this.music[id];
 
