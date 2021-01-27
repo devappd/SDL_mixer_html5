@@ -101,6 +101,10 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                 Module["SDL2Mixer"].music[id] = new Audio(url);
                 Module["SDL2Mixer"].music[id].addEventListener("ended", Module["SDL2Mixer"].musicFinished, false);
                 Module["SDL2Mixer"].music[id].addEventListener("error", Module["SDL2Mixer"].musicError, false);
+                Module["SDL2Mixer"].music[id].addEventListener("abort", Module["SDL2Mixer"].musicInterrupted, false);
+                // Can browser recover from these states? If not, consider enabling these.
+                //Module["SDL2Mixer"].music[id].addEventListener("stalled", Module["SDL2Mixer"].musicInterrupted, false);
+                //Module["SDL2Mixer"].music[id].addEventListener("suspend", Module["SDL2Mixer"].musicInterrupted, false);
                 if (context)
                     Module["SDL2Mixer"].music[id].dataset.context = context;
                 return id;
@@ -213,6 +217,11 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
 
                 // Reset to defaults
                 this.resetMusicState(audio);
+            },
+
+            musicInterrupted: function(e) {
+                // Reset to defaults
+                this.resetMusicState(e.target);
             }
         };
     }), html5_handle_music_stopped);
