@@ -568,6 +568,7 @@ Mix_Music *Mix_LoadMUSType_RW(SDL_RWops *src, Mix_MusicType type, int freesrc)
     int i;
     void *context;
     Sint64 start;
+    Mix_MusicType detectedType;
 
     if (!src) {
         Mix_SetError("RWops pointer is NULL");
@@ -578,6 +579,11 @@ Mix_Music *Mix_LoadMUSType_RW(SDL_RWops *src, Mix_MusicType type, int freesrc)
     /* If the caller wants auto-detection, figure out what kind of file
      * this is. */
     if (type == MUS_NONE) {
+#ifdef MUSIC_HTML5
+        type = MUS_HTML5;
+        detectedType = detect_music_type(src);
+#else
+        (void)detectedType;
         if ((type = detect_music_type(src)) == MUS_NONE) {
             /* Don't call Mix_SetError() since detect_music_type() does that. */
             if (freesrc) {
@@ -585,6 +591,7 @@ Mix_Music *Mix_LoadMUSType_RW(SDL_RWops *src, Mix_MusicType type, int freesrc)
             }
             return NULL;
         }
+#endif
     }
 
     Mix_ClearError();
@@ -592,6 +599,15 @@ Mix_Music *Mix_LoadMUSType_RW(SDL_RWops *src, Mix_MusicType type, int freesrc)
     if (load_music_type(type) && open_music_type(type)) {
         for (i = 0; i < SDL_arraysize(s_music_interfaces); ++i) {
             Mix_MusicInterface *interface = s_music_interfaces[i];
+
+#ifdef MUSIC_HTML5
+            if (detectedType == MUS_NONE && interface->type != MUS_HTML5)
+                continue;
+            else if (detectedType == interface->type
+                     && (!load_music_type(detectedType) || !open_music_type(detectedType)))
+                continue;
+#endif
+
             if (!interface->opened || type != interface->type || !interface->CreateFromRW) {
                 continue;
             }
