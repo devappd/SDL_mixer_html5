@@ -213,7 +213,7 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                 if (!(audio instanceof HTMLMediaElement))
                     return;
 
-                console.error("Error " + audio.error.code + "; details: " + audio.error.message);
+                Module["printErr"]("Error " + audio.error.code + "; details: " + audio.error.message);
 
                 // Reset to defaults
                 this.resetMusicState(audio);
@@ -351,7 +351,7 @@ static void *MusicHTML5_CreateFromFile(const char *file)
             if (isValidUrl(file))
                 url = file;
             else {
-                console.error(`URL ${url} is invalid`);
+                Module["printErr"](`URL ${url} is invalid`);
                 return -1;
             }
         }
@@ -418,9 +418,9 @@ static int MusicHTML5_Play(void *context, int play_count)
 
             // Older browsers do not return a Promise
             if (played)
-                played.catch((e) => console.error(e));
+                played.catch((e) => Module["printErr"](e));
         } catch (e) {
-            console.error(e);
+            Module["printErr"](e);
             return -1;
         }
         return 0;
