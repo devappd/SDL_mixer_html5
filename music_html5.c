@@ -173,7 +173,9 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                     m4a: 'audio/mp4',
                     aif: 'audio/x-aiff',
                     webm: 'audio/webm',
-                    adts: 'audio/aac'
+                    adts: 'audio/aac',
+                    mkv: 'video/x-matroska',
+                    mka: 'audio/x-matroska'
                 };
 
                 // Get any <audio>, doesn't matter which
@@ -196,6 +198,51 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                     return this.canPlayType(type);
                 else // Fail without Exception
                     return false;
+            },
+
+            canPlayMagic: function(buf) {
+                let canPlay;
+
+                const targets = [
+                    { type: "audio/ogg", magic: [0x4f, 0x67, 0x67, 0x53] },  // OggS
+                    { type: "audio/flac", magic: [0x66, 0x4c, 0x61, 0x43] }, // fLaC
+                    //{ type: "audio/midi", magic: [0x4d, 0x54, 0x68, 0x64] }, // MThd
+                    { type: "audio/mp3", magic: [0x49, 0x44, 0x33] },        // ID3
+                    { type: "audio/wav", magic: [0x52, 0x49, 0x46, 0x46] },
+                    { type: "audio/mp4", magic: [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D] },
+                    { type: "audio/x-aiff", magic: [0x46, 0x4F, 0x52, 0x4D] },
+                    { type: ["audio/webm", "audio/x-matroska"], magic: [0x1A, 0x45, 0xDF, 0xA3] }
+                ];
+                
+                targets.some((target) => {
+                    const targetMagic = target.magic;
+                    const magicLength = targetMagic.length;
+                    const magic = buf.slice(0, magicLength);
+
+                    let matching = true;
+                    for (let i = 0; i < magicLength; i++) {
+                        if (magic[i] !== targetMagic[i]) {
+                            matching = false;
+                            break;
+                        }
+                    }
+
+                    if (matching) {
+                        const targetTypes = Array.isArray(target.type) ? target.type : [target.type];
+                        targetTypes.some((targetType) => {
+                            canPlay = Module["SDL2Mixer"].canPlayType(targetType);
+                            if (canPlay)
+                                return true;
+                        });
+                        return true;
+                    }
+                });
+
+                // MP3 special case
+                if (!canPlay && magic[0] === 0xFF && (magic[1] & 0xFE) === 0xFA)
+                    canPlay = Module["SDL2Mixer"].canPlayType("audio/mp3");
+
+                return canPlay;
             },
 
             musicFinished: function(e) {
@@ -293,8 +340,12 @@ static void *MusicHTML5_CreateFromRW(SDL_RWops *src, int freesrc)
             const context = $2;
 
             const buf = new Uint8Array(Module.HEAPU8.buffer, ptr, size);
+
+            if (!Module["SDL2Mixer"].canPlayMagic(buf))
+                return -1;
+
             const url = Module["SDL2Mixer"].createBlob(buf);
-            const id = Module["SDL2Mixer"].createAudio(url, context);
+            const id = Module["SDL2Mixer"].createMusic(url, context);
 
             return id;
         }, buf, size, music);
@@ -302,6 +353,8 @@ static void *MusicHTML5_CreateFromRW(SDL_RWops *src, int freesrc)
 
     if (id == -1)
     {
+        if (freebuf)
+            SDL_free(buf);
         SDL_free(music);
         return NULL;
     }
@@ -332,16 +385,28 @@ static void *MusicHTML5_CreateFromFile(const char *file)
     id = EM_ASM_INT({
         const file = UTF8ToString($0);
         const context = $1;
-        let url;
 
+        let url;
         try {
             // Is path in FS?
             const buf = FS.readFile(file);
             url = Module["SDL2Mixer"].createBlob(buf);
+
+            let canPlay = Module["SDL2Mixer"].canPlayFile(file);
+
+            if (!canPlay)
+                canPlay = Module["SDL2Mixer"].canPlayMagic(buf);
+
+            if (!canPlay)
+                return -1;
         } catch(e) {
             // Fail silently, presume file not in FS.
             // Assume it's a relative or absolute URL
             url = file;
+
+            // Check audio capability by file extension
+            if (!Module["SDL2Mixer"].canPlayFile(url))
+                return -1;
         }
 
         const id = Module["SDL2Mixer"].createMusic(url, context);
