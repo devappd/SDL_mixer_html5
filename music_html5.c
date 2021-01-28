@@ -450,13 +450,13 @@ static void *MusicHTML5_CreateFromFile(const char *file)
 static void MusicHTML5_SetVolume(void *context, int volume)
 {
     MusicHTML5 *music = (MusicHTML5 *)context;
-    volume /= MIX_MAX_VOLUME;
+    float normalized_volume = ((float)volume) / MIX_MAX_VOLUME;
 
     EM_ASM({
         const id = $0;
         const volume = Math.min(Math.max(0, $1), 1);
         Module["SDL2Mixer"].music[id].volume = volume;
-    }, music->id, volume);
+    }, music->id, normalized_volume);
 }
 
 static void MusicHTML5_Stop(void *context);
