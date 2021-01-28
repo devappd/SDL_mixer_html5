@@ -276,7 +276,7 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                 if (!(audio instanceof HTMLMediaElement))
                     return;
 
-                Module["printErr"]("Error " + audio.error.code + "; details: " + audio.error.message);
+                err("Error " + audio.error.code + "; details: " + audio.error.message);
 
                 Module["SDL2Mixer"].resetMusicState(audio);
             },
@@ -489,9 +489,9 @@ static int MusicHTML5_Play(void *context, int play_count)
 
             // Older browsers do not return a Promise
             if (played)
-                played.catch((e) => Module["printErr"](e));
+                played.catch((e) => err(e));
         } catch (e) {
-            Module["printErr"](e);
+            err(e);
             return -1;
         }
         return 0;
