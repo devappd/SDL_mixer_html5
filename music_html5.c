@@ -148,7 +148,7 @@ static int MusicHTML5_Open(const SDL_AudioSpec *spec)
                     context = parseInt(audio.dataset.context);
                 }
 
-                dynCall("vi", wasmMusicStopped, [context]);
+                wasmTable.get(wasmMusicStopped)(context);
             },
 
             getNewId: function() {
