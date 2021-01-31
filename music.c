@@ -583,8 +583,7 @@ Mix_Music *Mix_LoadMUSType_RW(SDL_RWops *src, Mix_MusicType type, int freesrc)
         type = MUS_HTML5;
         detectedType = detect_music_type(src);
 #else
-        (void)detectedType;
-        if ((type = detect_music_type(src)) == MUS_NONE) {
+        if ((type = detectedType = detect_music_type(src)) == MUS_NONE) {
             /* Don't call Mix_SetError() since detect_music_type() does that. */
             if (freesrc) {
                 SDL_RWclose(src);
@@ -603,12 +602,11 @@ Mix_Music *Mix_LoadMUSType_RW(SDL_RWops *src, Mix_MusicType type, int freesrc)
 #ifdef MUSIC_HTML5
             if (detectedType == MUS_NONE && interface->type != MUS_HTML5)
                 continue;
-            else if (detectedType == interface->type
-                     && (!load_music_type(detectedType) || !open_music_type(detectedType)))
-                continue;
 #endif
 
-            if (!interface->opened || type != interface->type || !interface->CreateFromRW) {
+            if (!interface->opened 
+                || (detectedType != interface->type && type != interface->type) 
+                || !interface->CreateFromRW) {
                 continue;
             }
 
